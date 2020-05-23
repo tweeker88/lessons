@@ -1,0 +1,375 @@
+***LESSON 1***
+1) \set PROMPT1 '%n:%~%R%#' - устанавливает переменную для отображение user:db(~)
+2) \t - отключает вывод имён столбцов и результирующей строки с количеством выбранных записей.
+3) \a - выравнивание таблиц
+4) \o - вывод результатов в файл/на экран
+5) \gset - запись вывода в переменную
+6) \dt - вывод таблиц всех схем
+7) \dnS - вывод списка всех схем и их создателей
+8) \db - вывод табличных пространств
+9) \d - вывод описание таблицы
+10) \x - вывод списка всех подготовленных операций в представлении
+11) \dT - вывод составных типов
+12) \dL - вывод установленных языков
+***LESSON 2***
+SELECT * FROM pg_file_settings - показывает содержимое конфига, реальные значения могут отличаться
+
+SELECT setting FROM pg_settings - показывает значения всех параметров
+name, setting, unit - название и значение
+boot_val - значение по умолчанию
+reset_val - если параметр был изменен во время сеанса, то командой RESET можно восстановить это значение
+source - источник текущего значения параметра
+pending_restart - значение в файле конфига, для применения требуется перезапуск сервера
+context - действие, необходимое для применения параметра
+
+SELECT pg_reload_conf() - перечитать конфиг
+
+ALTER SYSTEM SET - устанавливает параметр в конфиг файл postgresql.auto.conf
+ALTER SYSTEM RESET - удаляет параметр в конфиг файл postgresql.auto.conf
+
+SHOW - показывает значение параметра
+SET - установка параметров во время сеанта
+
+current_setting(name) - вывод значения параметра
+
+***LESSON 3***
+Транзакции работаю со снимками.
+Read committed является уровнем изоляции по умолчанию в
+PostgreSQL. На этом уровне снимок данных строится в начале
+выполнения каждого оператора SQL. Таким образом, оператор
+работает с неизменной и согласованной картиной данных, но два
+одинаковых запроса, следующих один за другим, могут показать
+разные данные.
+Repeatable read снимок строится в начале транзакции (при
+выполнении первого оператора) — поэтому все запросы в одной
+транзакции видят одни и те же данные. Этот уровень удобен,
+например, для отчетов, состоящих из нескольких запросов.
+Serializable гарантирует полную изоляцию: можно писать
+операторы так, как будто транзакция работает одна. Плата за
+удобство — определенная доля транзакций завершается
+
+Во всех строках есть доп. скрытые столбцы:
+xmin - код транзакции, добавившей строку этой версии
+xmax - код транзацкии, удалившей строку этой версии\
+
+***LESSON 4***
+Журнал предзаписи - попадает запись при изменении в БД,данные записываются не физ. на диск, а в буфер, для восстановления согласованности данных.
+pg_wal - содержит журналы предзаписи для восстановления
+
+***LESSON 5***
+SELECT datname FROM pg_database; (\l) - вывод БД кластера
+postgres - инициализируется при первом запуске СУБД
+template1 - шаблон, из которого создаются последующие БД
+template0 - шаблон, из которого создаются чистые БД(никогда меняется)
+
+\set ECHO_HIDDEN on - установка константы на просмотр запросов, которые выполняют команды
+
+SELECT nspname FROM pg_namespace; - вывод списка схем
+
+CREATE SCHEMA special - создания новой схемы
+
+SHOW search_path - показывает для каких схем будут выполняться запросы
+$user - схема с тем же именем, что и им тек.пользователя
+
+SELECT current_schemas(true) - явно показывает какие схемы будут задействованы
+
+ALTER TABLE t SET SCHEMA special - перемещение таблицы в другую схему
+
+***LESSON 6***
+SELECT spcname FROM pg_tablespace - просмотр табличных пространств
+CREATE TABLESPACE ts LOCATION '/path/' - создание табличного пространства
+CREATE DATABASE test TABLESPACE ts - указываем табличное пространство по умолчанию при создании БД
+SELECT pg_relation_filepath('name') - показывает расположение файлов, относящихся к объекту
+
+***LESSON 7***
+CREATE DATABASE bookstore - создание БД bookstore
+CREATE SCHEMA bookstore - создание схемы bookstore
+SET search_path = bookstore, public - установка пути поиска
+CREATE TABLE books(book_id SERIAL PRIMARY KEY, title TEXT) - создание таблицы books
+CREATE TABLE authors(
+    author_id SERIAL PRIMARY KEY,
+    last_name text,
+    first_name text,
+    middle_name text
+) - создание таблицы авторов
+CREATE TABLE authorship
+(
+    book_id   integer REFERENCES books,
+    author_id integer REFERENCES authors,
+    seq_num   integer,
+    PRIMARY KEY (book_id,author_id)
+) - создание таблицы авторство
+CREATE TABLE operations(
+    operation_id SERIAL PRIMARY KEY,
+    book_id INTEGER NOT NULL REFERENCES books,
+    qty_change INTEGER,
+    date_created DATE DEFAULT now()
+) - создание таблицы с операциями
+
+INSERT INTO authors(last_name, first_name, middle_name)
+VALUES ('Николаевич', 'Толстой', 'Лев');
+INSERT INTO authors(last_name, first_name, middle_name)
+VALUES ('Сергеевич', 'Пушки', 'Александр');
+INSERT INTO authors(last_name, first_name, middle_name)
+VALUES ('Юрьевич', 'Лермонтов', 'Михаил');
+
+INSERT INTO books(title)
+VALUES ('Живой труп');
+INSERT INTO books(title)
+VALUES ('Евгений Онегин');
+INSERT INTO books(title)
+VALUES ('Маскарад');
+
+INSERT INTO authorship(book_id, author_id, seq_num)
+VALUES (1, 1, 1);
+INSERT INTO authorship(book_id, author_id, seq_num)
+VALUES (2, 2, 1);
+INSERT INTO authorship(book_id, author_id, seq_num)
+VALUES (3, 3, 1);
+
+INSERT INTO operations(book_id, qty_change) VALUES (1, 10);
+INSERT INTO operations(book_id, qty_change) VALUES (2, 0);
+INSERT INTO operations(book_id, qty_change) VALUES (3, -7);
+
+***LESSON 8***
+PREPARE name_func(text) AS SELECT * FROM authors WHERE last_name = $1 - подготовленная операция
+DECLARE name_cursor CURSOR FOR SELECT * FROM authors - объявления курсора
+FETCH name_cursor - получение данных построчно
+FETCH 2 name_cursor - указываем размер выборки
+CLOSE name_cursor - закрытие курсора
+
+CREATE VIEW authors_v AS
+SELECT a.author_id,
+       a.first_name || ' ' ||
+       a.last_name ||
+       coalesce(' ' || nullif(a.middle_name, ''), '') AS display_name
+FROM authors a - создание представление для выборки авторов
+
+CREATE VIEW catalog_v AS
+SELECT b.book_id,
+       b.title AS display_name
+FROM books b - создание представление для каталога книг
+
+CREATE VIEW operations_v AS
+SELECT book_id,
+       CASE WHEN qty_change > 0 THEN 'Поступление' ELSE 'Покупка' END op_type,
+       abs(qty_change)                                                qty_change,
+       to_char(date_created, 'DD.MM.YYYY')                            date_created
+FROM operations
+ORDER BY operation_id - создание представления для операций над книгами
+
+***LESSON 9***
+Категории изменчивости:
+Volatile - возвращаемое значение может меняться при одинаковых входных параметров
+Stable - значение не меняется в пределах одного оператора SQL, функция не может менять состояние БД
+Immutable - значение не меняется, функция детерминирована, не может менять состояние БД
+
+CREATE FUNCTION fill() RETURNS void AS $$
+INSERT INTO t
+    SELECT random() FROM generate_series(1,3);
+$$ LANGUAGE SQL; - создание таблицы без входных параметров
+
+CREATE OR REPLACE FUNCTION fill() RETURNS bigint AS $$
+INSERT INTO t
+    SELECT random() FROM generate_series(1,3);
+SELECT count(*) FROM t;
+$$ LANGUAGE SQL; - возвращаемое значение через RETURNS
+
+Менять логику внутри функции можно без удаления самой функции, если меняется сигнатура функции, то удаление обязательно
+
+IN - входной параметр
+OUT - выходной параметр
+INOUT - входной/выходной параметр
+
+Существуют перегруженные функции
+CREATE FUNCTION maximum(a integer, b integer) RETURNS integer AS
+CREATE FUNCTION maximum(a integer, b integer, c integer) RETURNS integer AS
+
+Так же, существуют полиморфные функции
+CREATE FUNCTION maximum(a anyelement, b anyelement) RETURNS anyelement AS
+Но, при вызове нужно обязательное приведение к типам maximum(a:text, b:text)
+
+Значение по умолчанию для параметров
+CREATE FUNCTION maximum(a anyelement, b anyelement, c anyelement default null)
+RETURNS anyelement AS
+
+Можно менять категории изменчивости и изоляции
+CREATE FUNCTION cnt() RETURNS bigint AS $$
+SELECT count(*) FROM t;
+$$ VOLATILE(STABLE | IMMUTABLE) LANGUAGE SQL;
+
+CREATE OR REPLACE FUNCTION author_name(middle_name IN text, first_name IN text, last_name IN text, fio OUT text) AS
+$$
+SELECT middle_name || ' ' || substr(first_name, 1, 1) || '.' || substr(last_name, 1, 1) || '.';
+$$
+    IMMUTABLE LANGUAGE SQL; - создание функции для отображении авторов
+
+CREATE OR REPLACE VIEW authors_v AS
+SELECT a.author_id, author_name(a.middle_name, a.first_name, a.last_name) AS display_name
+FROM authors a
+ORDER BY display_name; - создание отображения авторов
+
+CREATE OR REPLACE FUNCTION book_name(id_book IN integer, title IN text, text OUT text) AS
+$$
+SELECT title || '. ' ||
+       string_agg(author_name(a.last_name, a.first_name, a.middle_name), ', ' ORDER BY ash.seq_num)
+FROM authors a
+         JOIN authorship ash ON a.author_id = ash.author_id
+WHERE ash.book_id = book_name.id_book; - создание функции для отображения книг и их авторов
+$$
+    STABLE LANGUAGE SQL;
+
+CREATE VIEW catalog_v AS
+SELECT b.book_id,
+       book_name(b.book_id, b.title) AS display_name
+FROM   books b
+ORDER BY display_name; - создания отображения книг
+
+***LESSON 10***
+CREATE TYPE currency AS (
+    amount numeric,
+    code   text
+); - создание составного типа
+
+Значения составного типа можно формировать либо в виде строки, внутри которой в скобках перечислены значения:
+=> INSERT INTO transactions VALUES(1, NULL, '(100.00,"RUR")');
+
+Либо с помощью табличного конструктора ROW:
+=> INSERT INTO transactions VALUES(2, ROW(80.00,'RUR'), NULL);
+
+Если составной тип содержит более одного поля, то слово ROW можно опустить:
+=> INSERT INTO transactions VALUES(3, (20.00,'RUR'), NULL);
+
+Чтобы обратиться к отдельному атрибуту, составное значение необходимо взять в скобки, чтобы отличать атрибут записи от столбца таблицы:
+=> SELECT (t.debit).amount, (t.credit).amount FROM transactions t;
+
+CREATE OPERATOR * (
+    PROCEDURE = multyply,
+    LEFTARG  = numeric,
+    RIGHTARG = currency
+    ); - создание оператора умножения
+
+SELECT * FROM pg_type; - вывод всех типов
+
+=> CREATE FUNCTION func_name()
+RETURNS SETOF seats AS $$$$ IMMUTABLE LANGUAGE SQL; - Ключевое отличие - слово SETOF. В таком случае функция возвращает не первую строку последнего запроса, как обычно, а все строки последнего запроса.
+CREATE FUNCTION func_name() RETURNS TABLE() AS $$$$ LANGUAGE SQL; - равнозначный споособ объявления табличного вывода - указать слово TABLE
+WITH ORDINALITY - пронумеровать строки в том порядке, в котором они получены при выборке
+
+***LESSON 11***
+CREATE EXTENSION - установка расширения
+DO 'BEGIN END;'; - анонимный блок
+
+CREATE FUNCTION fmt_out_2 (IN phone text, OUT code text, OUT num text)
+-- RETURNS можно не писать, предполагается RETURNS record
+AS $$
+BEGIN
+    IF phone ~ '^[0-9]*$' AND length(phone) = 10 THEN
+        code := substr(phone,1,3);
+        num  := substr(phone,4);
+    ELSE
+        code := NULL;
+        num  := NULL;
+    END IF;
+END;
+$$ LANGUAGE plpgsql IMMUTABLE; - условный оператор IF
+
+DO $$
+DECLARE
+    code text := (fmt_out_2('8122128506')).code;
+BEGIN
+    CASE code
+    WHEN '495', '499' THEN
+        RAISE NOTICE '% - Москва', code;
+    WHEN '812' THEN
+        RAISE NOTICE '% - Санкт-Петербург', code;
+    WHEN '384' THEN
+        RAISE NOTICE '% - Кемеровская область', code;
+    ELSE
+        RAISE NOTICE '% - Прочие', code;
+    END CASE;
+END; - условный оператор CASE
+
+FOR i IN 1 .. line_length LOOP
+    retval := substr(line, i,1) || retval;
+END LOOP; - цикл FOR
+
+***LESSON 12***
+Чтобы в результате выборки получилась ровно одна строка: ни больше, ни меньше. В этом случае удобно воспользоваться фразой INTO STRICT
+=> DO $$
+DECLARE
+    r record;
+BEGIN
+    SELECT id, code INTO STRICT r FROM t;
+    RAISE NOTICE '%', r;
+END;
+$$;
+
+Если результат запроса не нужен, можно не использовать фиктивные переменные, а заменить SELECT на PERFORM.
+=> CREATE FUNCTION do_something() RETURNS void AS $$
+BEGIN
+    RAISE NOTICE 'Что-то сделалось.';
+END;
+$$ LANGUAGE plpgsql;
+CREATE FUNCTION
+=> DO $$
+BEGIN
+    PERFORM do_something();
+END;
+$$;
+
+***LESSON 13***
+Несвязанная переменная cur:
+=> DO $$
+DECLARE
+    -- объявление переменной
+    cur refcursor;
+BEGIN
+    -- связывание с запросом и открытие курсора
+    OPEN cur FOR SELECT * FROM t;
+END;
+$$;
+
+Связанная переменная связывается с запросом уже при объявлении.
+=> DO $$
+DECLARE
+    -- объявление и связывание переменной
+    cur CURSOR FOR SELECT * FROM t;
+BEGIN
+    -- открытие курсора
+    OPEN cur;
+END;
+$$;
+DO
+
+Связанная переменная может иметь параметры:
+=> DO $$
+DECLARE
+    -- объявление и связывание переменной
+    cur CURSOR(id integer) FOR SELECT * FROM t WHERE t.id = cur.id;
+BEGIN
+    -- открытие курсора с указанием фактических параметров
+    OPEN cur(1);
+END;
+$$;
+DO
+
+Чтение выполняется командой FETCH. Если нужно только сдвинуть "окно" курсора, то можно воспользоваться другой командой - MOVE.
+=> DO $$
+DECLARE
+    cur refcursor;
+    rec record;
+BEGIN
+    OPEN cur FOR SELECT * FROM t ORDER BY id;
+    MOVE cur;
+    FETCH cur INTO rec;
+    RAISE NOTICE '%', rec;
+    CLOSE cur;
+END;
+$$;
+
+***LESSON 15***
+Объявление массивов - integer[]
+Вставка массивов - ARRAY[10,20,30] или '{10,20,30}'
+CREATE FUNCTION func_name(VARIADIC a anyarray, maxsofar OUT anyelement) - создание функции с беск.числом входных данных
+
